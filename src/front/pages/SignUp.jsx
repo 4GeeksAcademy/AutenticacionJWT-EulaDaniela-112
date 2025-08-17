@@ -1,14 +1,14 @@
 import useGlobalReducer from "../hooks/useGlobalReducer.jsx";
-import { LoginForm } from "../components/LoginForm.jsx";
+import { SignupForm } from "../components/SignupForm.jsx";
 
 
-export const Login = () => {
+export const SignUp = () => {
     const {store, dispatch} = useGlobalReducer()
 
     return (
         <div className="text-center mt-5">
-            <h1>LOGIN</h1>
-            <LoginForm />
+            <h1>Sign Up</h1>
+            <SignupForm />
             
         </div>
 

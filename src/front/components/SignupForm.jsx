@@ -1,44 +1,44 @@
 import useGlobalReducer from "../hooks/useGlobalReducer.jsx";
 import React, { useState } from "react";
-import { login } from "../services/userServices.js";
+import { signup } from "../services/userServices.js";
 import { useNavigate } from "react-router-dom";
 
-export const LoginForm = () => {
+export const SignupForm = () => {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
-    const [error, setError] = useState(null) //Estado para guardar el msj de error//
+    const [error, setError] = useState(null);
 
     const { store, dispatch } = useGlobalReducer()
+
     const navigate = useNavigate()
 
- async function handleSubmit(e) {
-    e.preventDefault()
-    setError(null)
+   async function handleSubmit(e) {
+    e.preventDefault();
+    setError(null);
+
     try {
-      let isLogged = await login(email, password);
-      if (isLogged && isLogged.access_token){
-        dispatch({type:'LOGIN',payload:isLogged})
-        navigate("/private")
+      const created = await signup(email, password);
+      if (created) {
+        navigate("/login");
       } else {
-        setError( isLogged.error)
+        setError("Error al crear el usuario, intenta con otro correo");
       }
-    } catch (error) {
-    console.error("error al conectar con el servidor", error)
+    } catch (err) {
+      setError("Error en el registro: " + err.message);
     }
   }
 
     return (
         <form className="w-50 mx-auto" onSubmit={handleSubmit}>
             <div className="mb-3">
-                <label htmlFor="exampleFormControlInput1" className="form-label">Email address</label>
+                <label htmlFor="exampleFormControlInput1" className="form-label">Email</label>
                 <input type="email" className="form-control" id="exampleFormControlInput1" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="mb-3">
                 <label htmlFor="exampleFormControlTextarea1" className="form-label">Password</label>
                 <input type="password" className="form-control" id="exampleFormControlTextarea1" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-            {error && <div className="alert alert-danger">{error}</div>}
-            <button type="submit" className="btn btn-primary">Enviar</button>
+            <button type="submit">Crear Usuario</button>
         </form>
     )
 }

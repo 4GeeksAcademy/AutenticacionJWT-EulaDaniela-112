@@ -12,16 +12,20 @@ from api.admin import setup_admin
 from api.commands import setup_commands
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required,  JWTManager
 from flask_cors import CORS
+from flask_bcrypt import Bcrypt
 
-# from models import Person
 
 ENV = "development" if os.getenv("FLASK_DEBUG") == "1" else "production"
 static_file_dir = os.path.join(os.path.dirname(
     os.path.realpath(__file__)), '../dist/')
 app = Flask(__name__)
-#He tenido que implementar esta configuracion de cors para permitir solicitudes desde cualquier origen por que tenia fallas con solo tener el parametro app
-CORS(app, resources={r"/*": {"origins":"*"}}) 
+bcrypt = Bcrypt(app)
+
+
+CORS(app)
+
 app.url_map.strict_slashes = False
+
 
 # database condiguration
 db_url = os.getenv("DATABASE_URL")
@@ -35,7 +39,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
 
-app.config["JWT_SECRET_KEY"] = "Información-Clasificada"  # Change this!
+app.config["JWT_SECRET_KEY"] = "Información-Clasificada"
 jwt = JWTManager(app)
 
 # add the admin
@@ -56,20 +60,67 @@ def handle_invalid_usage(error):
 
 # generate sitemap with all your endpoints
 
+
 @app.route("/login", methods=["POST"])
 def login():
-    email = request.json.get("email", None)
-    password = request.json.get("password", None)
+    try:
+        email = request.json.get("email", None)
+        password = request.json.get("password", None)
+        query_user = db.session.execute(db.select(User).where(
+            User.email == email)).scalar_one_or_none()
+        if query_user is None:
+            return jsonify({"msg": "Usuario no encontrado"}), 404
 
-    query_user = db.session.execute(db.select(User).where(User.email == email)).scalar_one_or_none()
-   
-    if query_user is None:
-        return jsonify({"msg": "User Not Exist"}), 404
-    if email != query_user.email or password != query_user.password:
-        return jsonify({"msg": "Bad email or password"}), 401
+        if not bcrypt.check_password_hash(query_user.password, password):
+            return jsonify({"msg": "Contraseña incorrecta"}), 401
 
-    access_token = create_access_token(identity=query_user.id)
-    return jsonify({"access_token": access_token})
+        access_token = create_access_token(identity=str(query_user.id))
+
+        return jsonify({"msg": "Login exitoso", "access_token": access_token})
+    except Exception as e:
+        return jsonify({"msg": "Error interno del servidor"}), 500
+
+
+@app.route("/signup", methods=["POST"])
+def signup():
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    # Validaciones básicas
+    if not email or not password:
+        return jsonify({"msg": "Email and password are required"}), 400
+
+    # Verificar si el usuario ya existe
+    existing_user = db.session.execute(
+        db.select(User).where(User.email == email)
+    ).scalar_one_or_none()
+
+    if existing_user:
+        return jsonify({"msg": "User already exists"}), 409
+
+    # encriptamos la contraseña ANTES de guardarla
+    hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    # Crear nuevo usuario con contraseña hasheada
+    new_user = User(
+        email=email,
+        password=hashed_pw,
+    )
+
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({"msg": "User created successfully"}), 201
+
+
+
+@app.route("/private", methods=["GET"])
+@jwt_required()
+def private():
+    print("Token recibido:", get_jwt_identity())
+    current_user = get_jwt_identity()
+    return jsonify({"msg": "Welcome to the private zone", "user": current_user})
 
 
 @app.route('/')
@@ -79,6 +130,8 @@ def sitemap():
     return send_from_directory(static_file_dir, 'index.html')
 
 # any other endpoint will try to serve it like a static file
+
+
 @app.route('/<path:path>', methods=['GET'])
 def serve_any_other_file(path):
     if not os.path.isfile(os.path.join(static_file_dir, path)):
